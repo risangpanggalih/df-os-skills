@@ -13,7 +13,10 @@
 #   clio.sh checkin <text> [id,id,...]              check in: what you're on today
 #   clio.sh off     [text]                          check in as off today
 #   clio.sh claim   <id> [YYYY-MM-DD]               put your name on an unclaimed task (the date when it is in a week with none)
-#   clio.sh report  <id> <text> [status] [doneTest] the verb (status: done|dropped|doing|todo)
+#   clio.sh report  <id> <text> [status] [doneTest] [by=<id>] [due=<date>]
+#                                                   the verb (status: done|dropped|doing|todo|blocked|on-hold);
+#                                                   by= names the task a blocked one waits on / an on-hold one gave way to;
+#                                                   due= is the new date a resume (blocked/on-hold → doing/todo) needs in an open week
 #   clio.sh note    <text>                          off-board report → your day file
 #   clio.sh new     <title> domain=<slug> [field=value ...]  mint a task (domain required unless project= given; project|sprint|assignee|doneTest|brief|unit|due)
 #   clio.sh edit    <id> field=value ...            task properties (title|brief|domain|project|sprint|assignee|unit|doneTest|due|reason)
@@ -24,7 +27,7 @@
 #   clio.sh project new <name> field=value ...      open a project (domain|start|due|goal required; people|slug)
 #   clio.sh project edit <slug> field=value ...     project properties (name|start|due|goal|domain|people|status|reason)
 #   clio.sh checkout                                the end of your day: due today or late, checked in on, also worked on
-#   clio.sh checkout [day=<words>] <id> [words=<text>] [status=done|dropped|doing|todo] [due=<date> reason=<text>] <id> ...
+#   clio.sh checkout [day=<words>] <id> [words=<text>] [status=done|dropped|doing|todo|blocked|on-hold] [by=<id>] [due=<date> reason=<text>] <id> ...
 #                                                   check out: one commit (send alone, with no ids: `checkout send`)
 #   clio.sh timeline [from] [to] [domain=<slug>]    projects with their dates, health and late marks (dates YYYY-MM-DD)
 #   clio.sh raw     <METHOD> <path> [jsonBody]      escape hatch
@@ -157,7 +160,9 @@ if t.get("due"):
     try: d=datetime.date.fromisoformat(str(t["due"])[:10]).strftime("%a %-d %b")
     except Exception: d=str(t["due"])
     print("dated:"+d); sys.exit()
-if not t.get("sprint") or t.get("status") not in ("todo","doing"): print("ok"); sys.exit()
+# Live: todo, doing, blocked, on-hold. Blocked and on-hold have no due date (Clio 3.2), so only todo and doing need one.
+if t.get("status") not in ("todo","doing","blocked","on-hold"): print("ok"); sys.exit()
+if not t.get("sprint") or t.get("status") in ("blocked","on-hold"): print("ok"); sys.exit()
 try: ws=json.loads(sys.argv[3])["sprints"]
 except Exception: print("maybe"); sys.exit()
 w=[x for x in ws if x.get("id")==t["sprint"]]
@@ -174,11 +179,48 @@ print("need" if w and w[0].get("status")=="open" else "ok" if w else "maybe")' "
            [ -n "$date" ] && parts+=("due=$(jenc "$date")")
            # refused (409) if someone took it since you looked, as in the web face
            req PATCH "/api/tasks/$id" "$(jobj "${parts[@]}")" ;;
-  report)  ensure_auth
-           id="$(echo "$1" | tr a-z A-Z)"; text="$2"; status="${3:-}"; dt="${4:-}"
+  report)  [ $# -ge 2 ] || { echo "usage: report <id> <text> [status] [doneTest] [by=<id>] [due=<date>]" >&2; exit 2; }
+           id="$(echo "$1" | tr a-z A-Z)"; text="$2"; shift 2
+           status=""; dt=""; by=""; due=""
+           for a in "$@"; do
+             case "$a" in
+               by=*)  by="$(echo "${a#by=}" | tr a-z A-Z)" ;;
+               due=*) due="${a#due=}"; isdate "$due" ;;
+               *)     if [ -z "$status" ]; then status="$a"; elif [ -z "$dt" ]; then dt="$a"; else echo "too many arguments: $a" >&2; exit 2; fi ;;
+             esac
+           done
+           # The same rules as Clio (SOLUTIONING 3.2), said before anything is sent.
+           [ -n "$(printf '%s' "$text" | tr -d '[:space:]')" ] || { echo "a report needs words: what happened?" >&2; exit 2; }
+           case "$status" in ""|todo|doing|done|dropped|blocked|on-hold) ;; *) echo "status is todo, doing, blocked, on-hold, done or dropped" >&2; exit 2 ;; esac
+           case "$status" in blocked|on-hold) [ -n "$due" ] && { echo "$id: blocked and on-hold take no due date; it gets one when it resumes" >&2; exit 2; } ;; esac
+           [ -n "$by" ] && { [[ "$by" =~ ^T-[0-9]+$ ]] || { echo "by= is a task id, e.g. by=T-012" >&2; exit 2; }; [ "$by" = "$id" ] && { echo "$id cannot wait on itself" >&2; exit 2; }; }
+           ensure_auth
+           # What the task is now decides by= (blocked or on-hold only) and a resume's date (in an open week).
+           if [ -n "$by" ] || [ -n "$due" ] || [ "$status" = doing ] || [ "$status" = todo ]; then
+             task="$(req GET "/api/tasks/$id")"
+             weeks="$(req GET /api/sprints 2>/dev/null || true)"
+             python3 -c '
+import json,sys
+id,status,by,due=sys.argv[1:5]
+try: t=json.loads(sys.argv[5])
+except Exception: sys.exit(0)
+if "status" not in t: sys.stderr.write(sys.argv[5]+"\n"); sys.exit(1)
+paused=("blocked","on-hold")
+target=status or ("doing" if t["status"]=="todo" else t["status"])
+resuming=status in ("doing","todo") and t["status"] in paused
+def die(m): sys.stderr.write(id+": "+m+"\n"); sys.exit(2)
+if by and target not in paused: die("by= goes only with blocked or on-hold")
+if due and not resuming: die("due= goes on a report only when it resumes a blocked or on-hold task (move a date with: due "+id+" <date>)")
+try: open_week=any(w.get("id")==t.get("sprint") and w.get("status")=="open" for w in json.loads(sys.argv[6])["sprints"])
+except Exception: open_week=bool(t.get("sprint"))
+if resuming and not due and open_week: die("it is "+t["status"].replace("-"," ")+": resuming it in the open week needs its new due date, e.g. due=2026-11-20")
+' "$id" "$status" "$by" "$due" "$task" "$weeks" || exit 2
+           fi
            parts=("text=$(jenc "$text")")
            [ -n "$status" ] && parts+=("status=$(jenc "$status")")
            [ -n "$dt" ]     && parts+=("doneTest=$(jenc "$dt")")
+           [ -n "$by" ]     && parts+=("by=$(jenc "$by")")
+           [ -n "$due" ]    && parts+=("due=$(jenc "$due")")
            req POST "/api/tasks/$id/report" "$(jobj "${parts[@]}")" ;;
   note)    ensure_auth; req POST /api/report "$(jobj "text=$(jenc "$1")")" ;;
   new)     ensure_auth
@@ -235,20 +277,43 @@ for a in sys.argv[1:]:
     if not eq: die("not an id or field=value: "+a)
     if k=="day": day=v; continue
     if cur is None: die(k+"= comes after a task id (day= is the only field before one)")
-    if k not in ("words","status","due","reason"): die("unknown field: "+k+" (words|status|due|reason)")
-    if k=="status" and v not in ("todo","doing","done","dropped"): die("status is todo, doing, done or dropped")
+    if k not in ("words","status","due","reason","by"): die("unknown field: "+k+" (words|status|by|due|reason)")
+    if k=="status" and v not in ("todo","doing","done","dropped","blocked","on-hold"): die("status is todo, doing, blocked, on-hold, done or dropped")
+    if k=="by":
+        v=v.upper()
+        if not re.fullmatch(r"T-\d+",v): die("by= is a task id, e.g. by=T-012")
     if k=="due" and not re.fullmatch(r"\d{4}-\d{2}-\d{2}",v): die("not a date: "+v+" (use YYYY-MM-DD)")
     cur[k]=v
 ids=[i["id"] for i in items]
 if len(ids)!=len(set(ids)): die("a task is named twice")
 for i in items:
-    if i.get("status") in ("done","dropped") and not i.get("words","").strip(): die(i["id"]+": "+i["status"]+" needs words")
+    if i.get("status") and not i.get("words","").strip(): die(i["id"]+": "+i["status"]+" needs words")
+    if i.get("status") in ("blocked","on-hold") and i.get("due"): die(i["id"]+": blocked and on-hold take no due date; it gets one when it resumes")
+    if i.get("by") and i.get("status") not in ("blocked","on-hold"): die(i["id"]+": by= goes with status=blocked or status=on-hold")
+    if i.get("by")==i["id"]: die(i["id"]+" cannot wait on itself")
     if i.get("status") in ("done","dropped") and i.get("due"): die(i["id"]+": "+i["status"]+" takes no due date")
     if i.get("reason") and not i.get("due"): die(i["id"]+": reason= goes with due=")
 o={"items":items}
 if day: o["words"]=day
 print(json.dumps(o))' "$@")" || exit 2
-           ensure_auth; req POST /api/checkout "$body" ;;
+           ensure_auth
+           # A resume (a blocked or on-hold task to doing or todo) in the open week needs its new due date, as in Clio.
+           resumes="$(printf '%s' "$body" | python3 -c 'import json,sys; print(" ".join(i["id"] for i in json.load(sys.stdin)["items"] if i.get("status") in ("doing","todo") and not i.get("due")))')"
+           if [ -n "$resumes" ]; then
+             weeks="$(req GET /api/sprints 2>/dev/null || true)"
+             for rid in $resumes; do
+               python3 -c '
+import json,sys
+try: t=json.loads(sys.argv[2])
+except Exception: sys.exit(0)
+if t.get("status") not in ("blocked","on-hold"): sys.exit(0)
+try: open_week=any(w.get("id")==t.get("sprint") and w.get("status")=="open" for w in json.loads(sys.argv[3])["sprints"])
+except Exception: open_week=bool(t.get("sprint"))
+if open_week: sys.stderr.write(sys.argv[1]+" is "+t["status"].replace("-"," ")+": resuming it in the open week needs due=<date>\n"); sys.exit(2)
+' "$rid" "$(req GET "/api/tasks/$rid")" "$weeks" || exit 2
+             done
+           fi
+           req POST /api/checkout "$body" ;;
   timeline)
            q=()
            for a in "$@"; do

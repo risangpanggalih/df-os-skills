@@ -18,6 +18,8 @@ bash "${CLAUDE_PLUGIN_ROOT}/scripts/clio.sh" checkout day="<optional>" \
   T-135 due=2026-10-23 reason="<why it moves later>" \
   T-152 words="<what happened>" status=done \
   T-158 words="<what happened>" \
+  T-160 words="<why it cannot go on>" status=blocked by=T-152 \
+  T-161 words="<what happened>" status=doing due=2026-11-20 \
   T-163
 
 # nothing to say on any task: the line alone
@@ -43,8 +45,13 @@ Rules:
 - **Never invent words.** Ask; use the member's own. A task with a
   `reported` line already has today's report: show it and need nothing more
   unless they want to add.
-- `status` is `done`, `dropped`, `doing` or `todo`. Done and Dropped need
-  words, and take no due date. A later date needs a reason; an earlier one
+- `status` is `done`, `dropped`, `doing`, `todo`, `blocked` or `on-hold`.
+  Any status needs words. Done and Dropped take no due date.
+- **Blocked** (a real blocker) and **On hold** (another task took priority)
+  need words (the reason) and take no due date; `by=T-NNN` optionally names
+  the task it waits on or that took priority. A blocked or on-hold task that
+  goes back to `doing` or `todo` is a resume and, in the open week, needs
+  `due=` with its new date. A later date needs a reason; an earlier one
   does not. Dates are `YYYY-MM-DD`, never before today.
 - One refused item refuses the whole check-out; nothing is written. Relay the
   reason as-is and fix that item.

@@ -79,6 +79,8 @@ edited. Your word is final; nobody approves it.
 > "report on T-041: outline locked, three candidates left"
 > "T-041 is done — the deck is at drive/…/deck-v3.pdf"
 > "drop T-052, we decided against it"
+> "T-047 is blocked, the venue has not confirmed (waits on T-044)"
+> "put T-049 on hold, the spring launch comes first"
 
 - **A report starts the work.** Nobody sets "in progress" by hand; reporting
   on a waiting task is what starting means.
@@ -87,6 +89,11 @@ edited. Your word is final; nobody approves it.
   If you cannot name it, it is not done — report the progress instead. A done
   needs only the words, which become the receipt. A done-test is optional; one
   sent with the report is written in the same commit.
+- **Blocked and on hold say why.** `blocked` is a real blocker (a person, a
+  client, an outside thing or another task); `on-hold` is a pause on purpose
+  because another task comes first. Both need the reason and may name the task
+  (`by=T-NNN`). Either clears the due date; going back to work is a resume,
+  which in the open week needs a new due date (`due=`).
 - **Do not launder the day.** If the plan said X and the day produced Y, the
   report says Y. The gap is signal, not failure.
 - **Backfill is the point.** Realise mid-conversation that something you just
@@ -120,7 +127,7 @@ minted.
 | Skill | Say | Does |
 |---|---|---|
 | `/clio:orient` | "what's going on in DF", "show the board" | The whole board: this week's sprint, what is moving, what has gone quiet, the backlog (live work not planned into the open week), each project's focus. Read-only. |
-| `/clio:mine` | "what's on my plate" | Your live tasks, with projects. Read-only. |
+| `/clio:mine` | "what's on my plate" | Your live tasks (doing, todo, then blocked and on hold with their reasons), with projects. Read-only. |
 | `/clio:today` | "who checked in today", "what happened today" | Today across the team, check-ins and reports apart. Read-only. |
 | `/clio:task` | "what happened on T-041" | One task in full, with its trail. Read-only. |
 | `/clio:new` | "new task: poster public" | Mint a task. Title names the result; add a done-test when the work is concrete. |
@@ -139,14 +146,16 @@ shows it to you; that hash is your receipt.
 
 - **A task in a week has a due date** (from Clio T-158 release 1). Clio
   refuses a task in a week without one; a backlog task may have none. Reports
-  are never blocked by it.
+  are never blocked by it, except a resume from blocked or on hold in the open
+  week, which carries its new date. Blocked and on-hold tasks have none.
 - **A later due date carries a reason** (from Clio T-158 release 1). Setting a
   first date or moving it earlier needs none. Moving it later writes the reason
   on the trail, for good. The same holds for a project's due date.
 - **Done, never Finished.** One word for a closed task or project, everywhere.
 
-- **The alarm lives on the work, never on a person.** A live task whose trail
-  has gone quiet for days is dying and the board says so. A quiet human is
+- **The alarm lives on the work, never on a person.** A doing or todo task whose trail
+  has gone quiet for days is dying and the board says so (a blocked or on-hold
+  one carries its reason instead). A quiet human is
   never marked. The check-in exists so that quiet can be read.
 - **Only promises that can die go on the board.** Client work and knowledge
   work get a task the day they start, or the Thursday report will not credit
@@ -197,7 +206,14 @@ merge only after Clio's no-General release is deployed. Older Clio ignores
 `domain=` on a task. Plugin 0.4.0 keeps working against the new Clio: `new`
 with no domain gets a 400 naming the domains.
 
+For clio 0.6.0 (blocked and on hold: `blocked`, `on-hold`, `by=`, a resume's
+`due=`): merge only after Clio's and Iris's `hold-blocked` release is deployed
+(Clio, the plugin and Iris together). Older Clio refuses the two statuses with
+a 400 naming the ones it knows.
+
 ## Change log
+
+- 2026-11-09 — clio 0.6.0, from Clio's Blocked and On hold release: `report` and `checkout` take `blocked` and `on-hold` (words required, an optional `by=T-NNN` for the task it waits on or that took priority, never the task itself, no due date) and a resume back to `doing` or `todo` takes `due=`, which the script requires in the open week, as Clio does. `claim` treats blocked and on-hold as live but asks no date for them. `report`, `checkout`, `mine`, `orient`, `task`, `due`, `edit` and `checkin` say what the two mean and how they move. Not on `main` until that release is deployed.
 
 - 2026-10-21 — clio 0.5.0, from Clio's no-General release: every task has a domain and a project is optional. `new` takes `domain=` (required unless `project=` is given) and the skill asks for a domain from `domain` when none is named; `edit` takes `domain=`, and `project=` with no value takes a task out of its project. General is gone from every skill; `domain new` accepts the colour `slate`; `focus` is for dated projects only. Not on `main` until that release is deployed.
 - 2026-10-20 — clio 0.4.0, from Clio T-158 releases 2 and 3: `checkout` (no args: `GET /api/checkout`, the three lists; with items: `POST /api/checkout`, one commit) and `timeline [from] [to] [domain=]` (`GET /api/timeline`, printed as projects with dates, health and late marks). Skills `checkout` and `timeline`; `report` and `checkin` say Home's end of the day is now Check out and Report on a task stays. Not on `main` until Clio's releases 2 and 3 are deployed.

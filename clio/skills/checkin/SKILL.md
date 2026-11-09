@@ -40,6 +40,7 @@ Rules:
   member when it will be done and pass the date (`YYYY-MM-DD`) to `claim`;
   without it the script stops and says so. Never pick a date for them. A task
   that already has a due date keeps it; the date argument is then ignored.
+  A blocked or on-hold task is live but has no due date: it is claimed without one.
 - It is planning and presence, not proof. No done-test, no status.
 - Keep the member's own words. Confirm the line and the ids before sending —
   it is a signed commit.

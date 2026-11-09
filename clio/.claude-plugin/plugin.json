@@ -1,8 +1,8 @@
 {
   "name": "clio",
   "displayName": "Clio",
-  "description": "Read and write the DF Labs board (Clio) from any Claude Code session: orient, check in, report, mint, note, due dates, domains and projects, the Timeline and check out. Signs in at DF-OS, once for every DF Labs plugin. Two verbs, kept apart: check-in is the attendance, report is what happened. Every write is a signed commit, you via clio.",
-  "version": "0.5.0",
+  "description": "Read and write the DF Labs board (Clio) from any Claude Code session: orient, check in, report, mint, note, due dates, blocked and on hold, domains and projects, the Timeline and check out. Signs in at DF-OS, once for every DF Labs plugin. Two verbs, kept apart: check-in is the attendance, report is what happened. Every write is a signed commit, you via clio.",
+  "version": "0.6.0",
   "author": { "name": "DF Labs" },
   "homepage": "https://github.com/sheanmad/df-os-skills",
   "repository": "https://github.com/sheanmad/df-os-skills",
