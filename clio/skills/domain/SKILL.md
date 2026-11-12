@@ -1,23 +1,36 @@
 ---
 name: domain
-description: List or open DF Labs (Clio) domains, the areas of work that hold projects (DF-OS, Sales & Business). Use when the member says "what domains are there", "show projects by domain", "how are the projects doing", "which project is late", "new domain". Lists every domain with its projects and their health.
+description: List, open, park, archive or restore DF Labs (Clio) domains, the areas of work that hold projects (DF-OS, Sales & Business). Use when the member says "what domains are there", "show projects by domain", "how are the projects doing", "which project is late", "new domain", "archive the Sales domain", "park it", "bring it back". Lists every domain with its status, projects and their health.
 ---
 
 # Domains
 
 ```
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/clio.sh" domain
-bash "${CLAUDE_PLUGIN_ROOT}/scripts/clio.sh" domain new "Sales & Business" orange "<optional description>"
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/clio.sh" domain --all
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/clio.sh" domain new "Sales & Business" "#3a6ea5" "<optional description>"
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/clio.sh" domain archive sales
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/clio.sh" domain restore sales
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/clio.sh" domain park sales
 ```
 
-- `domain` answers every domain with its projects: dates, goal, people,
-  health (On track, At risk, Late, Done) and done / doing / total task counts.
-  Summarise it; never dump the JSON. A domain is never done and has no due
-  date; it clusters projects, and its tasks with no project are counted as
-  "No project".
-- A new domain needs a name and a colour: `violet`, `orange`, `teal`,
-  `pink`, `blue`, `olive`, `brown`, `green` or `slate`. The description is
-  optional. Clio answers its slug.
+- `domain` lists each domain with its status (active, parked) and colour,
+  then its projects: dates, health (On track, At risk, Late, Done), done /
+  doing / total task counts, goal and people. Archived domains are left out
+  and counted at the end; `domain --all` lists them too, with the date they
+  were archived. Summarise it. A domain is never done and has no due date; it
+  clusters projects.
+- A new domain needs a name and a colour: a hex like `#3a6ea5`, or one of the
+  older names `violet`, `orange`, `teal`, `pink`, `blue`, `olive`, `brown`,
+  `green`, `slate`. Clio refuses a hex another domain already uses and says
+  which one. The description is optional. Clio answers its slug.
+- **Status.** `park` sets a domain aside (it stays on the board); `archive`
+  is a soft delete: the domain leaves the lists and takes no new task or
+  project, and its history stays. `restore` makes an archived or parked
+  domain active again. Clio refuses an archive while the domain has running
+  projects or open tasks: the script prints them, one per line, and exits 1.
+  Tell the member what holds it; close or move that work first. Confirm
+  before archiving.
 - A domain has no owner and no person. Do not ask for one.
 - Confirm the name and colour before sending; surface the hash.
 

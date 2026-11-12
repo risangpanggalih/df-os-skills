@@ -22,8 +22,9 @@
 #   clio.sh edit    <id> field=value ...            task properties (title|brief|domain|project|sprint|assignee|unit|doneTest|due|reason)
 #   clio.sh due     <id> <YYYY-MM-DD> [reason]      set or move a task's due date (a later date needs the reason)
 #   clio.sh focus   <slug> <line>                   set a dated project's current focus
-#   clio.sh domain                                  every domain, with its projects and their health
-#   clio.sh domain  new <name> <colour> [text]      open a domain (colour: violet|orange|teal|pink|blue|olive|brown|green|slate)
+#   clio.sh domain  [--all]                         every domain with its status, projects and their health (archived ones only with --all)
+#   clio.sh domain  new <name> <colour> [text]      open a domain (colour: violet|orange|teal|pink|blue|olive|brown|green|slate, or a hex like #3a6ea5)
+#   clio.sh domain  archive|restore|park <slug>     set a domain's status (archive refuses while it has open work, and lists it)
 #   clio.sh project new <name> field=value ...      open a project (domain|start|due|goal required; people|slug)
 #   clio.sh project edit <slug> field=value ...     project properties (name|start|due|goal|domain|people|status|reason)
 #   clio.sh checkout                                the end of your day: due today or late, checked in on, also worked on
@@ -114,6 +115,13 @@ ensure_auth() {
 jids() { python3 -c 'import json,sys; print(json.dumps([x.strip().upper() for x in sys.argv[1].split(",") if x.strip()]))' "$1"; }
 # A comma list of slugs → JSON array, trimmed.
 jslugs() { python3 -c 'import json,sys; print(json.dumps([x.strip() for x in sys.argv[1].split(",") if x.strip()]))' "$1"; }
+# req, and the HTTP code on the last line of its answer.
+reqs() { local -a saved=("${CURL[@]}"); CURL+=(-w $'\n%{http_code}'); req "$@"; CURL=("${saved[@]}"); }
+# A domain colour: one of the names, or a hex (#3a6ea5, or 3a6ea5); sent as given.
+iscolour() {
+  case "$1" in violet|orange|teal|pink|blue|olive|brown|green|slate) return 0 ;; esac
+  [[ "$1" =~ ^#?[0-9a-fA-F]{6}$ ]] || { echo "not a colour: $1 (violet, orange, teal, pink, blue, olive, brown, green, slate, or a hex like #3a6ea5)" >&2; exit 2; }
+}
 # A date must be YYYY-MM-DD before it is sent.
 isdate() { [[ "$1" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || { echo "not a date: $1 (use YYYY-MM-DD)" >&2; exit 2; }; }
 # field=value pairs → JSON object parts in the array `parts`; dates are checked, people is a list.
@@ -241,14 +249,66 @@ if resuming and not due and open_week: die("it is "+t["status"].replace("-"," ")
            [ -n "${3:-}" ] && parts+=("reason=$(jenc "$3")")
            req PATCH "/api/tasks/$id" "$(jobj "${parts[@]}")" ;;
   focus)   ensure_auth; req PATCH "/api/projects/$1" "$(jobj "focus=$(jenc "$2")")" ;;
-  domain)  ensure_auth
+  domain)  dusage="usage: domain [--all] | domain new <name> <colour> [description] | domain archive|restore|park <slug>"
            case "${1:-}" in
-             "")  req GET /api/domains ;;
+             ""|--all|all)
+                  all="${1:-}"; ensure_auth
+                  # Each domain with its status; archived ones only with --all (as Clio's Domains page keeps them apart).
+                  req GET /api/domains | python3 -c '
+import json,sys
+raw=sys.stdin.read()
+try: t=json.loads(raw)
+except Exception: print(raw); sys.exit()
+if "domains" not in t: print(raw); sys.exit()
+everything=sys.argv[1]!=""
+H={"on_track":"On track","on-track":"On track","at_risk":"At risk","at-risk":"At risk","late":"Late","done":"Done"}
+shown=[d for d in t["domains"] if everything or d.get("status")!="archived"]
+hidden=len(t["domains"])-len(shown)
+if not shown: print("No domains.")
+for d in shown:
+    st=d.get("status") or "active"
+    if st=="archived" and d.get("archived"): st+=" "+str(d["archived"])
+    print("%s (%s)  %s  %s" % (d.get("name",d.get("slug")),d.get("slug"),st,d.get("colour") or "no colour"))
+    ps=d.get("projects") or []
+    if not ps: print("  (no project)")
+    for p in ps:
+        h=p.get("health") or p.get("status") or ""; h=H.get(h,h.replace("_"," ").capitalize())
+        print("  %s  %s -> %s  %s  done %s, doing %s, of %s" % (p.get("name"),p.get("start"),p.get("due"),h,p.get("done",0),p.get("doing",0),p.get("total",0)))
+        extra=[x for x in (p.get("goal") and "goal: "+p["goal"], p.get("people") and "people: "+", ".join(p["people"])) if x]
+        if extra: print("    "+"; ".join(extra))
+if hidden: print("\n%d archived domain%s not shown (domain --all)" % (hidden,"" if hidden==1 else "s"))
+' "$all"; exit 0 ;;
              new) [ $# -ge 3 ] || { echo "usage: domain new <name> <colour> [description]" >&2; exit 2; }
+                  iscolour "$3"; ensure_auth
                   parts=("name=$(jenc "$2")" "colour=$(jenc "$3")")
                   [ -n "${4:-}" ] && parts+=("description=$(jenc "$4")")
                   req POST /api/domains "$(jobj "${parts[@]}")" ;;
-             *)   echo "usage: domain | domain new <name> <colour> [description]" >&2; exit 2 ;;
+             archive|restore|park)
+                  [ $# -eq 2 ] && [ -n "$2" ] || { echo "usage: domain $1 <slug>" >&2; exit 2; }
+                  case "$1" in archive) st=archived ;; restore) st=active ;; park) st=parked ;; esac
+                  ensure_auth
+                  out="$(reqs PATCH "/api/domains/$2" "$(jobj "status=$(jenc "$st")")")"
+                  code="${out##*$'\n'}"; body="${out%$'\n'*}"
+                  [[ "$code" =~ ^2 ]] && { printf '%s\n' "$body"; exit 0; }
+                  # Refused: the reason, and on an archive the open work that holds it, one line each.
+                  printf '%s' "$body" | python3 -c '
+import json,sys
+raw=sys.stdin.read()
+try: e=json.loads(raw)
+except Exception: sys.stderr.write((raw or "no answer")+"\n"); sys.exit()
+sys.stderr.write((e.get("error") or raw)+"\n")
+o=e.get("open") or {}
+ps,ts=o.get("projects") or [],o.get("tasks") or []
+if ps:
+    sys.stderr.write("Running projects:\n")
+    for p in ps: sys.stderr.write("  %s (%s)%s, %s open task%s\n" % (p.get("name"),p.get("slug"),", due "+p["due"] if p.get("due") else "",p.get("openTasks",0),"" if p.get("openTasks")==1 else "s"))
+if ts:
+    sys.stderr.write("Open tasks:\n")
+    for t in ts: sys.stderr.write("  %s %s (%s%s)\n" % (t.get("id"),t.get("title",""),t.get("status",""),", "+t["project"] if t.get("project") else ""))
+if ps or ts: sys.stderr.write("Close or move them first, then archive again.\n")
+'
+                  exit 1 ;;
+             *)   echo "$dusage" >&2; exit 2 ;;
            esac ;;
   project) ensure_auth
            case "${1:-}" in

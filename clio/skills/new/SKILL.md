@@ -14,7 +14,8 @@ bash "${CLAUDE_PLUGIN_ROOT}/scripts/clio.sh" new "<title>" domain=df-os assignee
 - **Every task has a domain.** Give `domain=<slug>`, or `project=<slug>` (a
   dated project; the task takes its domain). A project is optional: impromptu
   work is a task in its domain with no project. When the member names neither,
-  list the domains (`clio.sh domain`) and ask; never guess one.
+  list the domains (`clio.sh domain`) and ask; never guess one. An archived
+  domain takes no new task (Clio answers "<Name> is archived").
 
 Other fields (all optional): `project` (slug of a dated project), `sprint` (id),
 `assignee` (slug — defaults to you), `doneTest`, `brief`, `unit`

@@ -12,7 +12,8 @@ bash "${CLAUDE_PLUGIN_ROOT}/scripts/clio.sh" project edit calliope-first-prototy
 ```
 
 - **A new project needs a domain, a start, a due date not before the start,
-  and a goal.** Domain slugs come from `domain`. `people` is optional, a
+  and a goal.** Domain slugs come from `domain`; an archived domain takes no
+  new project. `people` is optional, a
   comma list of slugs.
 - **Moving the due date later needs a reason**, written on the project's trail.
   An earlier date needs none.

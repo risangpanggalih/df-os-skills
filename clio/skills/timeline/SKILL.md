@@ -13,7 +13,8 @@ bash "${CLAUDE_PLUGIN_ROOT}/scripts/clio.sh" timeline domain=sales
 
 - Optional: a from date, a to date (`YYYY-MM-DD`) and `domain=<slug>`
   (slugs from `domain`). A project shows when its bar meets the window; a
-  late one runs on to today.
+  late one runs on to today. Archived domains are left out unless named with
+  `domain=`.
 - Each domain lists its dated projects: start → due, health (On track, At
   risk, Late, Done), done / doing / total tasks, and "N days late". Under a
   project, its late tasks with whose they are. Tasks with no project are not
