@@ -31,6 +31,22 @@ bash "${CLAUDE_PLUGIN_ROOT}/scripts/clio.sh" report T-041 "the spring launch com
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/clio.sh" report T-041 "the venue confirmed" doing due=2026-11-20
 ```
 
+**Tagging someone.** `@slug` in the words (or `@Full Name`, any case) tags a
+member: Clio tells them once, as the report is posted (an Iris DM: who wrote
+it, the task with its link, the line), never the writer. One of the task's
+other assignees already told of a status move gets that one message. An
+`@word` that is nobody stays plain words; the script says so before sending.
+Who can be tagged, with their slugs:
+
+```
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/clio.sh" members
+```
+
+Use a slug from that list when the member names someone ("tell Almer" →
+`@almer`); never guess a slug. After a report the script prints
+`Notified: Almer (@almer)`: say who was told, by name. Tag only when the
+member asks for it or names the person in the line; a tag sends a DM.
+
 **Blocked and on hold** are live statuses that stand aside from the walk:
 - `blocked`: the task cannot go on because of a real blocker, a person, a
   client, an outside thing or another task.
@@ -61,7 +77,7 @@ How to do it well:
    the target task, and CONFIRM before sending. A report is a signed commit;
    never fire one they have not seen.
 5. **Say Done, never Finished.** It is the board's one word for a closed task.
-6. Surface the commit hash the server returns. Relay refusals as-is (e.g.
+6. Surface the commit hash the server returns, and who was notified. Relay refusals as-is (e.g.
    "T-099 is not a task on this board", "a report needs words — what happened?").
 
 If the task id is unclear, run `mine` and let them pick.

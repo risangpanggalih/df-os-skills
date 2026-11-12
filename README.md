@@ -94,6 +94,10 @@ edited. Your word is final; nobody approves it.
   because another task comes first. Both need the reason and may name the task
   (`by=T-NNN`). Either clears the due date; going back to work is a resume,
   which in the open week needs a new due date (`due=`).
+- **Tag someone with `@slug`.** "T-041: sent the draft, @almer please check"
+  tells Almer once (an Iris DM with the line and the task's link), never you.
+  `@Full Name` works too; an `@word` that is nobody stays words. Who can be
+  tagged: `members`. The answer says who was notified.
 - **Do not launder the day.** If the plan said X and the day produced Y, the
   report says Y. The gap is signal, not failure.
 - **Backfill is the point.** Realise mid-conversation that something you just
@@ -129,7 +133,7 @@ minted.
 | `/clio:orient` | "what's going on in DF", "show the board" | The whole board: this week's sprint, what is moving, what has gone quiet, the backlog (live work not planned into the open week), each project's focus. Read-only. |
 | `/clio:mine` | "what's on my plate" | Your live tasks (doing, todo, then blocked and on hold with their reasons), with projects. Read-only. |
 | `/clio:today` | "who checked in today", "what happened today" | Today across the team, check-ins and reports apart. Read-only. |
-| `/clio:task` | "what happened on T-041" | One task in full, with its trail. Read-only. |
+| `/clio:task` | "what happened on T-041" | One task in full, with its trail (a member's tag read as `@Name`). Read-only. |
 | `/clio:new` | "new task: poster public" | Mint a task. Title names the result; add a done-test when the work is concrete. |
 | `/clio:edit` | "assign T-041 to budi", "move it to this sprint" | Properties: project, assignee, sprint, due date, done-test, title. Never status — that is a report. |
 | `/clio:checkout` | "check out", "wrap up my day" | The end of the day, like Home's Check out: words per task, Done or a moved date for late ones, one commit. From Clio T-158 releases 2 and 3. |
@@ -211,6 +215,12 @@ For clio 0.6.0 (blocked and on hold: `blocked`, `on-hold`, `by=`, a resume's
 (Clio, the plugin and Iris together). Older Clio refuses the two statuses with
 a 400 naming the ones it knows.
 
+For clio 0.8.0 (report mentions: `@slug` in a report tells that member;
+`members`; `task` prints its trail as lines with tags as names; `report` prints
+who was told): merge after Clio's `report-mentions` release is deployed
+(Metis, Iris and Clio together). Against an older Clio a tag is plain words and
+nobody is told; the script still works.
+
 For clio 0.7.0 (domain status: `domain archive|restore|park`, `domain --all`,
 a hex colour on `domain new`): merge only after Clio's `domain-status` release
 is deployed (Metis, Iris and Clio together). Older Clio refuses `archived` and
@@ -218,6 +228,7 @@ a hex colour with a 400.
 
 ## Change log
 
+- 2026-11-12 — clio 0.8.0, from Clio's report mentions (Shean, 12 Nov): `@slug` (or `@Full Name`) in a `report`'s words tags a member, and Clio tells them once through Iris, never the writer (the same reading as Calliope's tags). `report` says before sending which `@words` are nobody (kept as words), and after it prints `Notified: Almer (@almer)` from Clio's answer. New `members` lists who can be tagged (`@slug  Name`, viewers marked). `task` prints the JSON, then the trail as lines with each member's tag as `@Name`. Skills `report` and `task` say how. Not on `main` until that release is deployed.
 - 2026-11-12 — clio 0.7.1: a refused call fails. Every command that calls Clio now prints the answer and exits 1 on a 4xx or 5xx (as the Calliope plugin does); before, only `domain archive|restore|park` did, so a `domain new` with a colour already in use, a refused report or a bad task still exited 0.
 - 2026-11-12 — clio 0.7.0, from Clio's domain status (Shean, 12 Nov): `domain new` takes a hex colour (`#3a6ea5`, or `3a6ea5`) beside the nine names, sent as given; an unknown colour stops before sending. `domain archive|restore|park <slug>` (PATCH `/api/domains/:slug` with `status` archived, active, parked); a refused archive prints Clio's reason and the running projects and open tasks from its `open` field, one per line, and exits 1 (any refusal of these three exits 1). `domain` now prints each domain with its status and colour, then its projects, and leaves archived ones out unless `--all`. Skills `domain`, `timeline`, `new` and `project` say what archived means. Not on `main` until that release is deployed.
 

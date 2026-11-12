@@ -9,14 +9,16 @@
 # Usage:
 #   clio.sh board                                   the whole board (JSON)
 #   clio.sh mine                                    your live tasks
-#   clio.sh task    <id>                            one task, with its trail
+#   clio.sh task    <id>                            one task (JSON), then its trail as lines, a tag as @Name
+#   clio.sh members                                 who can be tagged in a report: slug, name (and viewers, marked)
 #   clio.sh checkin <text> [id,id,...]              check in: what you're on today
 #   clio.sh off     [text]                          check in as off today
 #   clio.sh claim   <id> [YYYY-MM-DD]               put your name on an unclaimed task (the date when it is in a week with none)
 #   clio.sh report  <id> <text> [status] [doneTest] [by=<id>] [due=<date>]
 #                                                   the verb (status: done|dropped|doing|todo|blocked|on-hold);
 #                                                   by= names the task a blocked one waits on / an on-hold one gave way to;
-#                                                   due= is the new date a resume (blocked/on-hold → doing/todo) needs in an open week
+#                                                   due= is the new date a resume (blocked/on-hold → doing/todo) needs in an open week;
+#                                                   @slug (or @Full Name) in the text tags a member: Clio tells them once (Iris DM)
 #   clio.sh note    <text>                          off-board report → your day file
 #   clio.sh new     <title> domain=<slug> [field=value ...]  mint a task (domain required unless project= given; project|sprint|assignee|doneTest|brief|unit|due)
 #   clio.sh edit    <id> field=value ...            task properties (title|brief|domain|project|sprint|assignee|unit|doneTest|due|reason)
@@ -129,6 +131,41 @@ iscolour() {
   case "$1" in violet|orange|teal|pink|blue|olive|brown|green|slate) return 0 ;; esac
   [[ "$1" =~ ^#?[0-9a-fA-F]{6}$ ]] || { echo "not a colour: $1 (violet, orange, teal, pink, blue, olive, brown, green, slate, or a hex like #3a6ea5)" >&2; exit 2; }
 }
+# @-tags (Clio's report mentions, 12 Nov; Calliope's reading, app/mentions.js): `@` then a member's slug or full
+# name, any case, not inside a word (an address), not followed by a letter, digit, _ or -; the longest name first.
+# Reads the members JSON (GET /api/board) from $MEMBERS_JSON. `tags names <text>`: the text with each tag as @Name;
+# `tags unknown <text>`: the @words that are nobody, one per line.
+tags() { MEMBERS_JSON="${MEMBERS_JSON:-}" python3 - "$@" <<'PY'
+import json,os,re,sys
+mode,text=sys.argv[1],sys.argv[2]
+APPS={'clio','metis','calliope','enodia','iris','muse','mimir','df-os','hub','system'}
+try: ms=[m for m in json.loads(os.environ.get("MEMBERS_JSON") or "{}").get("members",[]) if m.get("slug") and m["slug"].lower() not in APPS]
+except Exception: ms=[]
+toks=sorted({(t.strip().lower(),m["slug"]) for m in ms for t in (m["slug"],m.get("name") or "") if t.strip()},key=lambda x:-len(x[0]))
+name={m["slug"]:m.get("name") or m["slug"] for m in ms}
+W=re.compile(r"[\w-]")
+out,unknown,i,low=[],[],0,text.lower()
+j=low.find("@")
+while j!=-1:
+    b=text[j-1] if j>0 else ""
+    hit=None
+    if not (b and (W.match(b) or b in "@.")):
+        hit=next((t for t in toks if low.startswith(t[0],j+1) and not W.match(text[j+1+len(t[0]):j+2+len(t[0])] or " ")),None)
+        if not hit:
+            w=re.match(r"[\w-]+",text[j+1:])
+            if w: unknown.append("@"+w.group(0))
+    if hit:
+        out.append(text[i:j]+"@"+name[hit[1]]); i=j+1+len(hit[0]); j=low.find("@",i)
+    else: j=low.find("@",j+1)
+out.append(text[i:])
+print("\n".join(dict.fromkeys(unknown)) if mode=="unknown" else "".join(out))
+PY
+}
+# The board's members (one call), for tags.
+members_json() { req GET /api/board 2>/dev/null | python3 -c 'import json,sys
+try: print(json.dumps({"members":json.load(sys.stdin).get("members",[])}))
+except Exception: print("{}")'; }
+
 # A date must be YYYY-MM-DD before it is sent.
 isdate() { [[ "$1" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || { echo "not a date: $1 (use YYYY-MM-DD)" >&2; exit 2; }; }
 # field=value pairs → JSON object parts in the array `parts`; dates are checked, people is a list.
@@ -149,7 +186,26 @@ cmd="${1:-mine}"; shift || true
 case "$cmd" in
   board)   ensure_auth; call GET /api/board ;;
   mine)    ensure_auth; call GET "/api/tasks?mine=1" ;;
-  task)    ensure_auth; call GET "/api/tasks/$(echo "$1" | tr a-z A-Z)" ;;
+  task)    ensure_auth
+           out="$(CURL+=(-w $'\n%{http_code}'); req GET "/api/tasks/$(echo "$1" | tr a-z A-Z)")"
+           answer "$out" || exit 1
+           # The trail as lines, a member's tag read as @Name (the JSON above keeps the words as written).
+           MEMBERS_JSON="$(members_json)"; export MEMBERS_JSON
+           body="${out%$'\n'*}"
+           lines="$(printf '%s' "$body" | python3 -c 'import json,sys
+t=json.load(sys.stdin)
+for l in t.get("trail") or []: print("%s %s %s\t%s" % (l.get("date"),l.get("time"),l.get("by"),l.get("text","")))' 2>/dev/null || true)"
+           if [ -n "$lines" ]; then
+             echo; echo; echo "Trail:"
+             while IFS=$'\t' read -r head said; do echo "  $head — $(tags names "$said")"; done <<< "$lines"
+           fi ;;
+  members) ensure_auth
+           req GET /api/board | python3 -c 'import json,sys
+APPS={"clio","metis","calliope","enodia","iris","muse","mimir","df-os","hub","system"}
+try: ms=json.load(sys.stdin).get("members",[])
+except Exception: sys.exit("Clio did not answer with its members")
+for m in ms:
+    if m.get("slug") and m["slug"] not in APPS: print("@%-14s %s%s" % (m["slug"],m.get("name") or m["slug"],"  (viewer)" if m.get("role")=="viewer" else ""))' ;;
   checkin) ensure_auth
            text="${1:-}"; ids="${2:-}"
            call POST /api/commit "$(jobj "text=$(jenc "$text")" "tasks=$(jids "$ids")")" ;;
@@ -236,7 +292,19 @@ if resuming and not due and open_week: die("it is "+t["status"].replace("-"," ")
            [ -n "$dt" ]     && parts+=("doneTest=$(jenc "$dt")")
            [ -n "$by" ]     && parts+=("by=$(jenc "$by")")
            [ -n "$due" ]    && parts+=("due=$(jenc "$due")")
-           call POST "/api/tasks/$id/report" "$(jobj "${parts[@]}")" ;;
+           # A tag that is nobody stays words and tells no one: said before sending, never refused.
+           case "$text" in *@*) MEMBERS_JSON="$(members_json)"; export MEMBERS_JSON
+                                nobody="$(tags unknown "$text")"
+                                [ -n "$nobody" ] && echo "Not a member, kept as words: $(echo $nobody | tr ' ' ',' | sed 's/,/, /g') (clio.sh members lists who can be tagged)" >&2 ;; esac
+           out="$(CURL+=(-w $'\n%{http_code}'); req POST "/api/tasks/$id/report" "$(jobj "${parts[@]}")")"
+           answer "$out" || exit 1
+           # Who Clio told (each once, by Iris DM): by name, so the member hears it plainly.
+           told="$(printf '%s' "${out%$'\n'*}" | python3 -c 'import json,sys
+try: n=json.load(sys.stdin).get("notified") or []
+except Exception: n=[]
+print(", ".join("%s (@%s)" % (x.get("name") or x["slug"], x["slug"]) for x in n))' 2>/dev/null || true)"
+           [ -n "$told" ] && { echo; echo "Notified: $told"; }
+           exit 0 ;;
   note)    ensure_auth; call POST /api/report "$(jobj "text=$(jenc "$1")")" ;;
   new)     ensure_auth
            title="$1"; shift
