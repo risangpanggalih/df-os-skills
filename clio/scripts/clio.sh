@@ -115,6 +115,13 @@ ensure_auth() {
 jids() { python3 -c 'import json,sys; print(json.dumps([x.strip().upper() for x in sys.argv[1].split(",") if x.strip()]))' "$1"; }
 # A comma list of slugs → JSON array, trimmed.
 jslugs() { python3 -c 'import json,sys; print(json.dumps([x.strip() for x in sys.argv[1].split(",") if x.strip()]))' "$1"; }
+# A refused call fails: print the answer, and exit 1 on a 4xx or 5xx (as the Calliope plugin does).
+answer() { # "<body>\n<status>"
+  local code="${1##*$'\n'}"
+  printf '%s' "${1%$'\n'*}"
+  case "$code" in [45][0-9][0-9]) echo; return 1 ;; esac
+}
+call() { local out; out="$(CURL+=(-w $'\n%{http_code}'); req "$@")"; answer "$out"; }
 # req, and the HTTP code on the last line of its answer.
 reqs() { local -a saved=("${CURL[@]}"); CURL+=(-w $'\n%{http_code}'); req "$@"; CURL=("${saved[@]}"); }
 # A domain colour: one of the names, or a hex (#3a6ea5, or 3a6ea5); sent as given.
@@ -140,14 +147,14 @@ fields() {
 
 cmd="${1:-mine}"; shift || true
 case "$cmd" in
-  board)   ensure_auth; req GET /api/board ;;
-  mine)    ensure_auth; req GET "/api/tasks?mine=1" ;;
-  task)    ensure_auth; req GET "/api/tasks/$(echo "$1" | tr a-z A-Z)" ;;
+  board)   ensure_auth; call GET /api/board ;;
+  mine)    ensure_auth; call GET "/api/tasks?mine=1" ;;
+  task)    ensure_auth; call GET "/api/tasks/$(echo "$1" | tr a-z A-Z)" ;;
   checkin) ensure_auth
            text="${1:-}"; ids="${2:-}"
-           req POST /api/commit "$(jobj "text=$(jenc "$text")" "tasks=$(jids "$ids")")" ;;
+           call POST /api/commit "$(jobj "text=$(jenc "$text")" "tasks=$(jids "$ids")")" ;;
   off)     ensure_auth
-           req POST /api/commit "$(jobj "text=$(jenc "${1:-off today}")" "tasks=[]" "off=true")" ;;
+           call POST /api/commit "$(jobj "text=$(jenc "${1:-off today}")" "tasks=[]" "off=true")" ;;
   claim)   ensure_auth
            me="$(req GET /api/me | python3 -c 'import json,sys; print(json.load(sys.stdin)["slug"])')"
            id="$(echo "$1" | tr a-z A-Z)"; date="${2:-}"
@@ -186,7 +193,7 @@ print("need" if w and w[0].get("status")=="open" else "ok" if w else "maybe")' "
            parts=("assignee=$(jenc "$me")" 'expect={"assignee":""}')
            [ -n "$date" ] && parts+=("due=$(jenc "$date")")
            # refused (409) if someone took it since you looked, as in the web face
-           req PATCH "/api/tasks/$id" "$(jobj "${parts[@]}")" ;;
+           call PATCH "/api/tasks/$id" "$(jobj "${parts[@]}")" ;;
   report)  [ $# -ge 2 ] || { echo "usage: report <id> <text> [status] [doneTest] [by=<id>] [due=<date>]" >&2; exit 2; }
            id="$(echo "$1" | tr a-z A-Z)"; text="$2"; shift 2
            status=""; dt=""; by=""; due=""
@@ -229,26 +236,26 @@ if resuming and not due and open_week: die("it is "+t["status"].replace("-"," ")
            [ -n "$dt" ]     && parts+=("doneTest=$(jenc "$dt")")
            [ -n "$by" ]     && parts+=("by=$(jenc "$by")")
            [ -n "$due" ]    && parts+=("due=$(jenc "$due")")
-           req POST "/api/tasks/$id/report" "$(jobj "${parts[@]}")" ;;
-  note)    ensure_auth; req POST /api/report "$(jobj "text=$(jenc "$1")")" ;;
+           call POST "/api/tasks/$id/report" "$(jobj "${parts[@]}")" ;;
+  note)    ensure_auth; call POST /api/report "$(jobj "text=$(jenc "$1")")" ;;
   new)     ensure_auth
            title="$1"; shift
            parts=("title=$(jenc "$title")")
            fields "$@"
-           req POST /api/tasks "$(jobj "${parts[@]}")" ;;
+           call POST /api/tasks "$(jobj "${parts[@]}")" ;;
   edit)    ensure_auth
            id="$(echo "$1" | tr a-z A-Z)"; shift
            parts=()
            fields "$@"
            [ ${#parts[@]} -eq 0 ] && { echo "usage: edit <id> field=value ...  (title|brief|project|sprint|assignee|unit|doneTest|due|reason)" >&2; exit 2; }
-           req PATCH "/api/tasks/$id" "$(jobj "${parts[@]}")" ;;
+           call PATCH "/api/tasks/$id" "$(jobj "${parts[@]}")" ;;
   due)     [ $# -ge 2 ] || { echo "usage: due <id> <YYYY-MM-DD> [reason]" >&2; exit 2; }
            isdate "$2"; ensure_auth
            id="$(echo "$1" | tr a-z A-Z)"
            parts=("due=$(jenc "$2")")
            [ -n "${3:-}" ] && parts+=("reason=$(jenc "$3")")
-           req PATCH "/api/tasks/$id" "$(jobj "${parts[@]}")" ;;
-  focus)   ensure_auth; req PATCH "/api/projects/$1" "$(jobj "focus=$(jenc "$2")")" ;;
+           call PATCH "/api/tasks/$id" "$(jobj "${parts[@]}")" ;;
+  focus)   ensure_auth; call PATCH "/api/projects/$1" "$(jobj "focus=$(jenc "$2")")" ;;
   domain)  dusage="usage: domain [--all] | domain new <name> <colour> [description] | domain archive|restore|park <slug>"
            case "${1:-}" in
              ""|--all|all)
@@ -282,7 +289,7 @@ if hidden: print("\n%d archived domain%s not shown (domain --all)" % (hidden,"" 
                   iscolour "$3"; ensure_auth
                   parts=("name=$(jenc "$2")" "colour=$(jenc "$3")")
                   [ -n "${4:-}" ] && parts+=("description=$(jenc "$4")")
-                  req POST /api/domains "$(jobj "${parts[@]}")" ;;
+                  call POST /api/domains "$(jobj "${parts[@]}")" ;;
              archive|restore|park)
                   [ $# -eq 2 ] && [ -n "$2" ] || { echo "usage: domain $1 <slug>" >&2; exit 2; }
                   case "$1" in archive) st=archived ;; restore) st=active ;; park) st=parked ;; esac
@@ -315,15 +322,15 @@ if ps or ts: sys.stderr.write("Close or move them first, then archive again.\n")
              new)  [ $# -ge 2 ] || { echo "usage: project new <name> domain=<slug> start=<date> due=<date> goal=<text> [people=a,b]" >&2; exit 2; }
                    parts=("name=$(jenc "$2")"); shift 2
                    fields "$@"
-                   req POST /api/projects "$(jobj "${parts[@]}")" ;;
+                   call POST /api/projects "$(jobj "${parts[@]}")" ;;
              edit) [ $# -ge 3 ] || { echo "usage: project edit <slug> field=value ...  (name|start|due|goal|domain|people|status|reason)" >&2; exit 2; }
                    slug="$2"; shift 2; parts=()
                    fields "$@"
-                   req PATCH "/api/projects/$slug" "$(jobj "${parts[@]}")" ;;
+                   call PATCH "/api/projects/$slug" "$(jobj "${parts[@]}")" ;;
              *)    echo "usage: project new <name> field=value ... | project edit <slug> field=value ..." >&2; exit 2 ;;
            esac ;;
   checkout)
-           if [ $# -eq 0 ]; then ensure_auth; req GET /api/checkout; echo; exit 0; fi
+           if [ $# -eq 0 ]; then ensure_auth; call GET /api/checkout; echo; exit 0; fi
            [ "$1" = send ] && shift
            # Each id starts an item; the field=value pairs after it belong to it. day= is the line's own words.
            body="$(python3 -c '
@@ -373,7 +380,7 @@ if open_week: sys.stderr.write(sys.argv[1]+" is "+t["status"].replace("-"," ")+"
 ' "$rid" "$(req GET "/api/tasks/$rid")" "$weeks" || exit 2
              done
            fi
-           req POST /api/checkout "$body" ;;
+           call POST /api/checkout "$body" ;;
   timeline)
            q=()
            for a in "$@"; do
@@ -402,7 +409,7 @@ for d in t["domains"]:
         for k in p.get("tasks",[]):
             if k.get("late"): print("    %s %s  due %s  %d days late (%s)" % (k["id"],k.get("title",""),k.get("due"),k["late"],", ".join(k.get("assignees") or []) or "nobody"))
 ' ; exit 0 ;;
-  raw)     ensure_auth; req "$1" "$2" "${3:-}" ;;
+  raw)     ensure_auth; call "$1" "$2" "${3:-}" ;;
   *)       echo "unknown command: $cmd (see header for usage)" >&2; exit 2 ;;
 esac
 echo
