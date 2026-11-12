@@ -1,6 +1,6 @@
 ---
 name: domain
-description: List, open, park, archive or restore DF Labs (Clio) domains, the areas of work that hold projects (DF-OS, Sales & Business). Use when the member says "what domains are there", "show projects by domain", "how are the projects doing", "which project is late", "new domain", "archive the Sales domain", "park it", "bring it back". Lists every domain with its status, projects and their health.
+description: List, open, put on hold, archive or restore DF Labs (Clio) domains, the areas of work that hold projects (DF-OS, Sales & Business). Use when the member says "what domains are there", "show projects by domain", "how are the projects doing", "which project is late", "new domain", "archive the Sales domain", "put it on hold", "park it", "bring it back". Lists every domain with its status, projects and their health.
 ---
 
 # Domains
@@ -11,10 +11,10 @@ bash "${CLAUDE_PLUGIN_ROOT}/scripts/clio.sh" domain --all
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/clio.sh" domain new "Sales & Business" "#3a6ea5" "<optional description>"
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/clio.sh" domain archive sales
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/clio.sh" domain restore sales
-bash "${CLAUDE_PLUGIN_ROOT}/scripts/clio.sh" domain park sales
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/clio.sh" domain hold sales
 ```
 
-- `domain` lists each domain with its status (active, parked) and colour,
+- `domain` lists each domain with its status (active, on hold) and colour,
   then its projects: dates, health (On track, At risk, Late, Done), done /
   doing / total task counts, goal and people. Archived domains are left out
   and counted at the end; `domain --all` lists them too, with the date they
@@ -24,9 +24,10 @@ bash "${CLAUDE_PLUGIN_ROOT}/scripts/clio.sh" domain park sales
   older names `violet`, `orange`, `teal`, `pink`, `blue`, `olive`, `brown`,
   `green`, `slate`. Clio refuses a hex another domain already uses and says
   which one. The description is optional. Clio answers its slug.
-- **Status.** `park` sets a domain aside (it stays on the board); `archive`
+- **Status.** `hold` puts a domain on hold (it stays on the board; `park` is
+  the old name and does the same); `archive`
   is a soft delete: the domain leaves the lists and takes no new task or
-  project, and its history stays. `restore` makes an archived or parked
+  project, and its history stays. `restore` makes an archived or on-hold
   domain active again. Clio refuses an archive while the domain has running
   projects or open tasks: the script prints them, one per line, and exits 1.
   Tell the member what holds it; close or move that work first. Confirm

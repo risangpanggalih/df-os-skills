@@ -135,7 +135,7 @@ minted.
 | `/clio:checkout` | "check out", "wrap up my day" | The end of the day, like Home's Check out: words per task, Done or a moved date for late ones, one commit. From Clio T-158 releases 2 and 3. |
 | `/clio:timeline` | "show the timeline", "which projects are late" | Dated projects by domain with start, due, health and days late. Read-only. From Clio T-158 releases 2 and 3. |
 | `/clio:due` | "T-041 is due Friday", "push T-041 to next week" | Set or move a task's due date. A later date needs a reason. From Clio T-158 release 1. |
-| `/clio:domain` | "show the domains", "which project is late", "archive the Sales domain" | Every domain with its status, projects and their health (archived ones with `--all`); open a new domain (name, colour as a hex or an older name, description); park, archive or restore one. From Clio T-158 release 1; status and hex colours from Clio's domain status (12 Nov). |
+| `/clio:domain` | "show the domains", "which project is late", "archive the Sales domain" | Every domain with its status, projects and their health (archived ones with `--all`); open a new domain (name, colour as a hex or an older name, description); put on hold, archive or restore one. From Clio T-158 release 1; status and hex colours from Clio's domain status (12 Nov). |
 | `/clio:project` | "new project for the Calliope prototype" | Open a project in a domain with start, due date and goal; edit it. A later due date needs a reason. From Clio T-158 release 1. |
 | `/clio:focus` | "set the focus for events to …" | A project's one-line current focus. This is the board's prioritisation. |
 
@@ -216,8 +216,13 @@ a hex colour on `domain new`): merge only after Clio's `domain-status` release
 is deployed (Metis, Iris and Clio together). Older Clio refuses `archived` and
 a hex colour with a 400.
 
+For clio 0.7.2 (on hold: `domain hold`, `park` kept as its old name, both send
+`on-hold`): merge only after Clio's `on-hold` release is deployed (Metis, Iris
+and Clio together). Older Clio refuses `on-hold` for a domain with a 400.
+
 ## Change log
 
+- 2026-11-12 — clio 0.7.2, from Clio's on hold (Shean, 12 Nov): a domain or project set aside is "on hold", the task's word, no longer "parked". `domain hold <slug>` sends `status` `on-hold`; `domain park` stays as the old name and sends the same. `domain` prints "on hold" for a domain and "On hold" for a project, whether Clio answers `on-hold` or the old `parked`. Skills `domain` and `project` say on hold. Merge only after Clio's on-hold release is deployed (Metis, Iris and Clio together); older Clio refuses `on-hold` for a domain with a 400.
 - 2026-11-12 — clio 0.7.1: a refused call fails. Every command that calls Clio now prints the answer and exits 1 on a 4xx or 5xx (as the Calliope plugin does); before, only `domain archive|restore|park` did, so a `domain new` with a colour already in use, a refused report or a bad task still exited 0.
 - 2026-11-12 — clio 0.7.0, from Clio's domain status (Shean, 12 Nov): `domain new` takes a hex colour (`#3a6ea5`, or `3a6ea5`) beside the nine names, sent as given; an unknown colour stops before sending. `domain archive|restore|park <slug>` (PATCH `/api/domains/:slug` with `status` archived, active, parked); a refused archive prints Clio's reason and the running projects and open tasks from its `open` field, one per line, and exits 1 (any refusal of these three exits 1). `domain` now prints each domain with its status and colour, then its projects, and leaves archived ones out unless `--all`. Skills `domain`, `timeline`, `new` and `project` say what archived means. Not on `main` until that release is deployed.
 

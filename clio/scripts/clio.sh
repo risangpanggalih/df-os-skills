@@ -24,7 +24,8 @@
 #   clio.sh focus   <slug> <line>                   set a dated project's current focus
 #   clio.sh domain  [--all]                         every domain with its status, projects and their health (archived ones only with --all)
 #   clio.sh domain  new <name> <colour> [text]      open a domain (colour: violet|orange|teal|pink|blue|olive|brown|green|slate, or a hex like #3a6ea5)
-#   clio.sh domain  archive|restore|park <slug>     set a domain's status (archive refuses while it has open work, and lists it)
+#   clio.sh domain  archive|restore|hold <slug>     set a domain's status (archive refuses while it has open work, and lists it;
+#                                                   hold puts it on hold; `park` is the old name for hold)
 #   clio.sh project new <name> field=value ...      open a project (domain|start|due|goal required; people|slug)
 #   clio.sh project edit <slug> field=value ...     project properties (name|start|due|goal|domain|people|status|reason)
 #   clio.sh checkout                                the end of your day: due today or late, checked in on, also worked on
@@ -256,7 +257,7 @@ if resuming and not due and open_week: die("it is "+t["status"].replace("-"," ")
            [ -n "${3:-}" ] && parts+=("reason=$(jenc "$3")")
            call PATCH "/api/tasks/$id" "$(jobj "${parts[@]}")" ;;
   focus)   ensure_auth; call PATCH "/api/projects/$1" "$(jobj "focus=$(jenc "$2")")" ;;
-  domain)  dusage="usage: domain [--all] | domain new <name> <colour> [description] | domain archive|restore|park <slug>"
+  domain)  dusage="usage: domain [--all] | domain new <name> <colour> [description] | domain archive|restore|hold <slug>"
            case "${1:-}" in
              ""|--all|all)
                   all="${1:-}"; ensure_auth
@@ -268,12 +269,13 @@ try: t=json.loads(raw)
 except Exception: print(raw); sys.exit()
 if "domains" not in t: print(raw); sys.exit()
 everything=sys.argv[1]!=""
-H={"on_track":"On track","on-track":"On track","at_risk":"At risk","at-risk":"At risk","late":"Late","done":"Done"}
+H={"on_track":"On track","on-track":"On track","at_risk":"At risk","at-risk":"At risk","late":"Late","done":"Done","on-hold":"On hold","parked":"On hold"}
+WORD={"on-hold":"on hold","parked":"on hold"}  # an old parked is on hold (12 Nov)
 shown=[d for d in t["domains"] if everything or d.get("status")!="archived"]
 hidden=len(t["domains"])-len(shown)
 if not shown: print("No domains.")
 for d in shown:
-    st=d.get("status") or "active"
+    st=d.get("status") or "active"; st=WORD.get(st,st)
     if st=="archived" and d.get("archived"): st+=" "+str(d["archived"])
     print("%s (%s)  %s  %s" % (d.get("name",d.get("slug")),d.get("slug"),st,d.get("colour") or "no colour"))
     ps=d.get("projects") or []
@@ -290,9 +292,9 @@ if hidden: print("\n%d archived domain%s not shown (domain --all)" % (hidden,"" 
                   parts=("name=$(jenc "$2")" "colour=$(jenc "$3")")
                   [ -n "${4:-}" ] && parts+=("description=$(jenc "$4")")
                   call POST /api/domains "$(jobj "${parts[@]}")" ;;
-             archive|restore|park)
+             archive|restore|hold|park)
                   [ $# -eq 2 ] && [ -n "$2" ] || { echo "usage: domain $1 <slug>" >&2; exit 2; }
-                  case "$1" in archive) st=archived ;; restore) st=active ;; park) st=parked ;; esac
+                  case "$1" in archive) st=archived ;; restore) st=active ;; hold|park) st=on-hold ;; esac
                   ensure_auth
                   out="$(reqs PATCH "/api/domains/$2" "$(jobj "status=$(jenc "$st")")")"
                   code="${out##*$'\n'}"; body="${out%$'\n'*}"

@@ -18,7 +18,7 @@ bash "${CLAUDE_PLUGIN_ROOT}/scripts/clio.sh" project edit calliope-first-prototy
 - **Moving the due date later needs a reason**, written on the project's trail.
   An earlier date needs none.
 - Edit fields: `name`, `start`, `due`, `goal`, `domain`, `people`,
-  `status` (`active` or `parked`), `reason`. Closing a project is Mark done
+  `status` (`active` or `on-hold`), `reason`. Closing a project is Mark done
   in Clio, with what landed; it is not an edit.
 - Dates are `YYYY-MM-DD`. Confirm the fields before sending; surface the hash.
 
